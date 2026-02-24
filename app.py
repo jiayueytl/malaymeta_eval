@@ -8,6 +8,10 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# ==============================
+# CONFIG
+# ==============================
+
 MODEL_MAP = {
     "gemini_3_pro_preview": "Model 1",
     "gpt_5_2_2025_12_11": "Model 2",
@@ -24,25 +28,34 @@ MODEL_MAP = {
     "glm_4_5_air": "Model 13"
 }
 
-def get_db_connection():
-    return psycopg2.connect(
-        dbname=os.getenv("DB_NAME"),
-        user=os.getenv("DB_USER"),
-        password=os.getenv("DB_PASS"),
-        host=os.getenv("DB_HOST"),
-        port=os.getenv("DB_PORT")
-    )
+# ==============================
+# DATABASE
+# ==============================
 
-def fetch_assigned_tasks(username, offset=0):
+def get_db_connection():
+    url = os.getenv("DATABASE_URL")
+    if "?" in url:
+        url = url.split("?")[0]
+    return psycopg2.connect(url)
+
+def fetch_all_tasks(username):
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=RealDictCursor)
-    # Fetch task based on offset to allow navigation
     cur.execute("""
-        SELECT * FROM data.annotation_tasks 
-        WHERE username = %s AND is_submitted = FALSE 
-        ORDER BY row_num ASC 
-        LIMIT 1 OFFSET %s
-    """, (username, offset))
+        SELECT id, row_num, original_text, is_submitted
+        FROM data.annotation_tasks
+        WHERE username = %s
+        ORDER BY row_num ASC
+    """, (username,))
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+    return rows
+
+def fetch_task_by_id(task_id):
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    cur.execute("SELECT * FROM data.annotation_tasks WHERE id = %s", (task_id,))
     row = cur.fetchone()
     cur.close()
     conn.close()
@@ -51,100 +64,213 @@ def fetch_assigned_tasks(username, offset=0):
 def update_task_sql(task_id, ratings, qa_data):
     conn = get_db_connection()
     cur = conn.cursor()
+
     query = """
         UPDATE data.annotation_tasks 
-        SET ratings = %s, qa1_flag = %s, qa1_feedback = %s, qa1_status = %s, is_submitted = TRUE 
+        SET ratings = %s,
+            qa1_flag = %s,
+            qa1_feedback = %s,
+            qa1_status = %s,
+            is_submitted = TRUE
         WHERE id = %s
     """
-    # Note: Using qa1_flag_text for PASS/FAIL string
-    cur.execute(query, (json.dumps(ratings), qa_data['flag'], qa_data['feedback'], qa_data['status'], task_id))
+
+    cur.execute(query, (
+        json.dumps(ratings),
+        qa_data["flag"],
+        qa_data["feedback"],
+        qa_data["status"],
+        task_id
+    ))
+
     conn.commit()
     cur.close()
     conn.close()
 
+# ==============================
+# AUTH
+# ==============================
+
 def dot_login(username, password):
     url = "https://dot.ytlailabs.tech/api/v1/auth/token"
     payload = {
-        'grant_type': 'password', 'username': username, 'password': password,
-        'client_id': os.getenv("DOT_CLIENT_ID"), 'client_secret': os.getenv("DOT_CLIENT_SECRET")
+        "grant_type": "password",
+        "username": username,
+        "password": password,
+        "client_id": os.getenv("DOT_CLIENT_ID"),
+        "client_secret": os.getenv("DOT_CLIENT_SECRET")
     }
     try:
-        response = requests.post(url, data=payload, timeout=10)
-        return response.json().get("access_token") if response.status_code == 200 else None
-    except: return None
+        r = requests.post(url, data=payload, timeout=10)
+        if r.status_code == 200:
+            return r.json().get("access_token")
+    except:
+        pass
+    return None
 
-# --- UI ---
+# ==============================
+# SESSION RESTORE (FIX REFRESH)
+# ==============================
+
+# Try restore from URL params
+params = st.query_params
+
+if "token" not in st.session_state and "token" in params:
+    st.session_state.token = params["token"]
+    st.session_state.username = params["username"]
+    st.session_state.page = "Task List"
+
+# ==============================
+# UI CONFIG
+# ==============================
+
 st.set_page_config(page_title="MalayMeta Translation Eval", layout="wide")
 
+# ==============================
+# LOGIN
+# ==============================
+
 if "token" not in st.session_state:
+
     st.title("🔐 Login")
+
     with st.form("login"):
-        u = st.text_input("Username")
-        p = st.text_input("Password", type="password")
+        username = st.text_input("Username")
+        password = st.text_input("Password", type="password")
+
         if st.form_submit_button("Login"):
-            token = dot_login(u, p)
+            token = dot_login(username, password)
             if token:
-                st.session_state.token, st.session_state.username = token, u
-                st.session_state.task_offset = 0 # Initialize navigation
+                st.session_state.token = token
+                st.session_state.username = username
+                st.session_state.page = "Task List"
+
+                # Persist in URL (prevents refresh logout)
+                st.query_params["token"] = token
+                st.query_params["username"] = username
+
                 st.rerun()
-            else: st.error("Access Denied")
+            else:
+                st.error("Access Denied")
+
 else:
-    task = fetch_assigned_tasks(st.session_state.username, st.session_state.task_offset)
-    
-    if not task:
-        st.success("No more tasks found in this direction!")
-        if st.button("Go Back to Start"):
-            st.session_state.task_offset = 0
-            st.rerun()
-    else:
-        st.subheader(f"Task ID: {task['id']} | Row: {task['row_num']}")
-        
-        with st.expander("View Original & Reference", expanded=True):
+
+    if "page" not in st.session_state:
+        st.session_state.page = "Task List"
+
+    st.sidebar.title(f"👤 {st.session_state.username}")
+
+    if st.sidebar.button("📋 Task List"):
+        st.session_state.page = "Task List"
+        st.rerun()
+
+    if st.sidebar.button("🚪 Logout"):
+        st.session_state.clear()
+        st.query_params.clear()
+        st.rerun()
+
+    # ==============================
+    # TASK LIST
+    # ==============================
+
+    if st.session_state.page == "Task List":
+
+        st.title("📋 My Allocated Tasks")
+
+        tasks = fetch_all_tasks(st.session_state.username)
+
+        if not tasks:
+            st.info("No tasks allocated.")
+        else:
+            total = len(tasks)
+            submitted = sum(1 for t in tasks if t["is_submitted"])
+
+            st.progress(submitted / total)
+            st.caption(f"{submitted} / {total} completed")
+
+            for task in tasks:
+                with st.container(border=True):
+                    col1, col2, col3, col4 = st.columns([1, 1, 4, 1])
+
+                    col1.write(f"Row {task['row_num']}")
+                    col2.write("✅ Submitted" if task["is_submitted"] else "⏳ Pending")
+                    col3.write(task["original_text"][:120] + "...")
+
+                    if col4.button("Open", key=f"open_{task['id']}"):
+                        st.session_state.selected_task_id = task["id"]
+                        st.session_state.page = "Detail"
+                        st.rerun()
+
+    # ==============================
+    # DETAIL PAGE
+    # ==============================
+
+    elif st.session_state.page == "Detail":
+
+        task_id = st.session_state.get("selected_task_id")
+        task = fetch_task_by_id(task_id)
+
+        if not task:
+            st.error("Task not found.")
+        else:
+            st.title(f"Task Row {task['row_num']}")
+
+            if st.button("⬅ Back to List"):
+                st.session_state.page = "Task List"
+                st.rerun()
+
             col_a, col_b = st.columns(2)
             col_a.info(f"**Original ({task['language']}):**\n\n{task['original_text']}")
-            col_b.success(f"**Reference:**\n\n{task['reference']}")
+            col_b.success(f"**Notes:**\n\n{task['reference']}")
 
-        st.write("### Model Ranking")
-        tabs = st.tabs(list(MODEL_MAP.values()))
-        current_ratings = {}
+            st.divider()
+            st.subheader("Model Evaluation")
 
-        for i, (db_col, ui_name) in enumerate(MODEL_MAP.items()):
-            with tabs[i]:
-                st.markdown(f"**{ui_name} Translation:**")
-                st.info(task[db_col])
-                current_ratings[db_col] = st.radio(
-                    f"Rating for {ui_name}",
-                    options=[0, 1, 2, 3],
-                    horizontal=True,
-                    key=f"r_{task['id']}_{db_col}"
+            ratings = {}
+
+            tabs = st.tabs(list(MODEL_MAP.values()))
+
+            for i, (db_col, ui_name) in enumerate(MODEL_MAP.items()):
+                with tabs[i]:
+                    st.info(task[db_col])
+
+                    score = st.radio(
+                        f"Rating for {ui_name}",
+                        [0,1,2,3],
+                        horizontal=True,
+                        key=f"{task_id}_{db_col}_score"
+                    )
+
+                    justification = st.text_area(
+                        f"Justification for {ui_name}",
+                        key=f"{task_id}_{db_col}_just"
+                    )
+
+                    ratings[db_col] = {
+                        "score": score,
+                        "justification": justification
+                    }
+
+            st.divider()
+            st.subheader("QA1 Review")
+
+            col1, col2, col3 = st.columns([1,1,2])
+            qa_flag = col1.radio("QA1 Flag", ["PASS","FAIL"], horizontal=True)
+            qa_status = col2.selectbox("QA1 Status", ["pending","approved","rejected"])
+            qa_feedback = col3.text_input("QA1 Feedback")
+
+            if st.button("✅ Submit Annotation", type="primary", use_container_width=True):
+
+                update_task_sql(
+                    task_id,
+                    ratings,
+                    {
+                        "flag": qa_flag,
+                        "status": qa_status,
+                        "feedback": qa_feedback
+                    }
                 )
 
-        st.divider()
-        
-        # QA Section
-        st.subheader("QA1 Review")
-        c1, c2, c3 = st.columns([1, 1, 2])
-        q_flag = c1.radio("QA1 Flag", options=["PASS", "FAIL"], horizontal=True)
-        q_status = c2.selectbox("QA1 Status", ["pending", "approved", "rejected"])
-        q_feed = c3.text_input("QA1 Feedback")
-
-        # Navigation & Submission Footer
-        st.divider()
-        nav_col1, nav_col2, nav_col3 = st.columns([1, 2, 1])
-        
-        with nav_col1:
-            if st.button("⬅️ Previous", use_container_width=True):
-                if st.session_state.task_offset > 0:
-                    st.session_state.task_offset -= 1
-                    st.rerun()
-
-        with nav_col2:
-            if st.button("✅ Submit Annotation", type="primary", use_container_width=True):
-                update_task_sql(task['id'], current_ratings, {"flag": q_flag, "status": q_status, "feedback": q_feed})
                 st.toast("Submitted successfully!")
-                st.rerun()
-
-        with nav_col3:
-            if st.button("Skip Next ➡️", use_container_width=True):
-                st.session_state.task_offset += 1
+                st.session_state.page = "Task List"
                 st.rerun()
