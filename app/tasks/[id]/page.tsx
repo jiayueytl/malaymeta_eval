@@ -40,7 +40,7 @@ export default async function TaskDetailPage({
   const taskBriefUrl = process.env.TASK_BRIEF_URL ?? "https://onedrive.live.com/placeholder";
 
   return (
-    <div className="min-h-screen bg-[#0a0a0b]">
+    <div className="min-h-screen bg-[#f5f5f7]">
       <Navbar username={session.username} />
       <TaskDetailClient
         task={task}

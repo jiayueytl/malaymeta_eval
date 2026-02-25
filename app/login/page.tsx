@@ -34,7 +34,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#0a0a0b] relative overflow-hidden">
+    <div className="min-h-screen flex items-center justify-center bg-[#f5f5f7] relative overflow-hidden">
       {/* Background grid */}
       <div
         className="absolute inset-0 opacity-[0.04]"
@@ -44,11 +44,9 @@ export default function LoginPage() {
           backgroundSize: "60px 60px",
         }}
       />
-      {/* Glow */}
-      <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[400px] bg-indigo-600/10 rounded-full blur-[120px] pointer-events-none" />
+      <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[400px] bg-indigo-200/40 rounded-full blur-[120px] pointer-events-none" />
 
       <div className="relative w-full max-w-sm mx-4 animate-in">
-        {/* Logo mark */}
         <div className="mb-8 text-center">
           <div className="inline-flex items-center gap-2 mb-4">
             <div className="w-8 h-8 bg-indigo-500 rounded-lg flex items-center justify-center">
@@ -56,60 +54,53 @@ export default function LoginPage() {
                 <path d="M2 4h12M2 8h8M2 12h10" stroke="white" strokeWidth="1.5" strokeLinecap="round"/>
               </svg>
             </div>
-            <span style={{ fontFamily: "var(--font-display)" }} className="text-lg font-700 tracking-tight text-white">
+            <span style={{ fontFamily: "var(--font-display)" }} className="text-lg font-bold tracking-tight text-gray-900">
               MalayMeta
             </span>
           </div>
-          <p className="text-[#9898a8] text-sm">Translation Evaluation Platform</p>
+          <p className="text-black-400 text-sm">Translation Evaluation Platform</p>
         </div>
 
-        <form
-          onSubmit={handleSubmit}
-          className="bg-[#111113] border border-[#2e2e38] rounded-2xl p-8 space-y-5 shadow-2xl"
-        >
+        <form onSubmit={handleSubmit} className="bg-white border border-gray-200 rounded-2xl p-8 space-y-5 shadow-sm">
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-[#9898a8] uppercase tracking-widest">
-              Username
-            </label>
+            <label className="text-xs font-medium text-black-400 uppercase tracking-widest">Username</label>
             <input
               type="text"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               required
               autoFocus
-              className="w-full bg-[#18181c] border border-[#2e2e38] rounded-lg px-4 py-2.5 text-[#f4f4f6] text-sm placeholder:text-[#5c5c72] focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/30 transition-all"
+              className="w-full bg-gray-50 border border-gray-200 rounded-lg px-4 py-2.5 text-gray-900 text-sm placeholder:text-gray-300 focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400/30 transition-all"
               placeholder="your.username"
             />
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-[#9898a8] uppercase tracking-widest">
-              Password
-            </label>
+            <label className="text-xs font-medium text-black-400 uppercase tracking-widest">Password</label>
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              className="w-full bg-[#18181c] border border-[#2e2e38] rounded-lg px-4 py-2.5 text-[#f4f4f6] text-sm placeholder:text-[#5c5c72] focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/30 transition-all"
+              className="w-full bg-gray-50 border border-gray-200 rounded-lg px-4 py-2.5 text-gray-900 text-sm placeholder:text-gray-300 focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400/30 transition-all"
               placeholder="••••••••"
             />
           </div>
 
           {error && (
-            <div className="flex items-center gap-2 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2.5">
+            <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-lg px-3 py-2.5">
               <svg width="14" height="14" viewBox="0 0 14 14" fill="none" className="shrink-0">
                 <circle cx="7" cy="7" r="6" stroke="#ef4444" strokeWidth="1.5"/>
                 <path d="M7 4v3M7 9.5v.5" stroke="#ef4444" strokeWidth="1.5" strokeLinecap="round"/>
               </svg>
-              <p className="text-red-400 text-xs">{error}</p>
+              <p className="text-red-500 text-xs">{error}</p>
             </div>
           )}
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium text-sm rounded-lg py-2.5 transition-all duration-150 flex items-center justify-center gap-2"
+            className="w-full bg-indigo-500 hover:bg-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium text-sm rounded-lg py-2.5 transition-all duration-150 flex items-center justify-center gap-2"
           >
             {loading ? (
               <>
@@ -119,13 +110,11 @@ export default function LoginPage() {
                 </svg>
                 Authenticating…
               </>
-            ) : (
-              "Sign In"
-            )}
+            ) : "Sign In"}
           </button>
         </form>
 
-        <p className="text-center text-[#5c5c72] text-xs mt-6" style={{ fontFamily: "var(--font-mono)" }}>
+        <p className="text-center text-gray-300 text-xs mt-6" style={{ fontFamily: "var(--font-mono)" }}>
           v1.0 · MalayMeta Eval
         </p>
       </div>
