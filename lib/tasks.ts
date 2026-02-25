@@ -35,3 +35,18 @@ export async function updateTask(
     [JSON.stringify(ratings), qa.flag, qa.feedback, qa.status, taskId, username]
   );
 }
+
+export async function fetchAllTasksGrouped(): Promise<Record<string, TaskSummary[]>> {
+  const rows = await query<TaskSummary & { username: string }>(
+    `SELECT id, row_num, original_text, is_submitted, username
+     FROM data.annotation_tasks
+     ORDER BY username ASC, row_num ASC`
+  );
+
+  return rows.reduce<Record<string, TaskSummary[]>>((acc, row) => {
+    const { username, ...task } = row;
+    if (!acc[username]) acc[username] = [];
+    acc[username].push(task);
+    return acc;
+  }, {});
+}

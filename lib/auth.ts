@@ -30,4 +30,11 @@ export async function getSession(): Promise<Session | null> {
   }
 }
 
+export function getQaUsers(): string[] {
+  return (process.env.QA_USERS ?? "")
+    .split(",")
+    .map((u) => u.trim().toLowerCase())
+    .filter(Boolean);
+}
+
 export { COOKIE_NAME };

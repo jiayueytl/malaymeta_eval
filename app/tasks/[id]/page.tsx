@@ -1,15 +1,16 @@
-import { getSession } from "@/lib/auth";
+import { getSession, getQaUsers } from "@/lib/auth";
 import { fetchTaskById, fetchAllTasks } from "@/lib/tasks";
 import { redirect, notFound } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import TaskDetailClient from "./TaskDetailClient";
 
-function getQaUsers(): string[] {
-  return (process.env.QA_USERS ?? "")
-    .split(",")
-    .map((u) => u.trim().toLowerCase())
-    .filter(Boolean);
-}
+
+// function getQaUsers(): string[] {
+//   return (process.env.QA_USERS ?? "")
+//     .split(",")
+//     .map((u) => u.trim().toLowerCase())
+//     .filter(Boolean);
+// }
 
 export default async function TaskDetailPage({
   params,
