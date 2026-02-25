@@ -11,10 +11,11 @@ interface ModelRatingTabProps {
 }
 
 const SCORE_LABELS: Record<number, { label: string; color: string }> = {
-  0: { label: "Unacceptable", color: "text-red-400" },
-  1: { label: "Poor", color: "text-orange-400" },
-  2: { label: "Acceptable", color: "text-yellow-400" },
-  3: { label: "Good", color: "text-green-400" },
+  0: { label: "Completely incorrect", color: "text-red-400" },
+  1: { label: "Major Errors, Still Understandable", color: "text-orange-400" },
+  2: { label: "Mostly Correct but Not Natural", color: "text-yellow-400" },
+  3: { label: "Accurate but Style Not fully Captured ", color: "text-yellow-600" },
+  4: { label: "Excellent Translation  ", color: "text-green-400" },
 };
 
 export default function ModelRatingTab({
@@ -42,7 +43,7 @@ export default function ModelRatingTab({
           Quality Score
         </p>
         <div className="flex gap-2">
-          {[0, 1, 2, 3].map((s) => (
+          {[0, 1, 2, 3, 4].map((s) => (
             <button
               key={s}
               onClick={() => onScoreChange(s)}
