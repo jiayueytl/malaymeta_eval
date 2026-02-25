@@ -6,6 +6,7 @@ export interface Task extends Record<string, unknown> {
   original_text: string;
   language: string;
   reference: string;
+  url: string;
   is_submitted: boolean;
   ratings: Record<string, { score: number; justification: string }> | null;
   qa1_flag: string | null;

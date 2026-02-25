@@ -152,7 +152,22 @@ export default function TaskDetailClient({ task, isQaUser, taskBriefUrl, nextPen
             Original Text · {task.language}
           </p>
           <p className="text-sm text-[#f4f4f6] leading-relaxed">{task.original_text}</p>
+
+          <p className="text-sm text-[#f4f4f6] leading-relaxed">
+            <a
+                href={task.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-5 inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-[#18181c] border border-[#2e2e38] text-[#9898a8] hover:text-indigo-400 hover:border-indigo-500/40 transition-all"
+              >
+                <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+                  <path d="M2 11L11 2M11 2H6M11 2v5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+                Original URL: {task.url}
+              </a>
+            </p>
         </div>
+        
         <div className="bg-[#111113] border border-[#2e2e38] rounded-xl p-5 flex flex-col">
           <p className="text-xs font-medium text-emerald-400 uppercase tracking-widest mb-3 shrink-0" style={{ fontFamily: "var(--font-mono)" }}>
             Notes / Reference
