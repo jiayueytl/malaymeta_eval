@@ -5,9 +5,10 @@ import Link from "next/link";
 interface NavbarProps {
   username: string;
   isQaUser?: boolean;
+  isQa2User?: boolean;
 }
 
-export default function Navbar({ username, isQaUser }: NavbarProps) {
+export default function Navbar({ username, isQaUser, isQa2User }: NavbarProps) {
   const router = useRouter();
 
   async function handleLogout() {
@@ -52,13 +53,13 @@ export default function Navbar({ username, isQaUser }: NavbarProps) {
             <span className="text-xs text-gray-500" style={{ fontFamily: "var(--font-mono)" }}>
               {username}
             </span>
-            {isQaUser && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-600 border border-indigo-200">
-                QA
-              </span>
-            )}
+            {isQa2User ? (
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-50 text-purple-600 border border-purple-200">QA2</span>
+            ) : isQaUser ? (
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-600 border border-indigo-200">QA1</span>
+            ) : null}
           </div>
-          <button onClick={handleLogout} className="text-xs text-black-400 hover:text-gray-700 transition-colors px-2 py-1 rounded">
+          <button onClick={handleLogout} className="text-xs text-gray-400 hover:text-gray-700 transition-colors px-2 py-1 rounded">
             Sign out
           </button>
         </div>

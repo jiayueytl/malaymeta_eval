@@ -14,7 +14,6 @@ export async function middleware(req: NextRequest) {
   if (pathname.startsWith("/_next") || pathname === "/favicon.ico") return NextResponse.next();
 
   const jwt = req.cookies.get("mm_session")?.value;
-
   if (!jwt) {
     if (pathname.startsWith("/api/")) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     return NextResponse.redirect(new URL("/login", req.url));
@@ -24,13 +23,12 @@ export async function middleware(req: NextRequest) {
     const { payload } = await jwtVerify(jwt, SECRET);
     const username = (payload as { username: string }).username?.toLowerCase();
 
-    // Protect /qa — only QA users
+    const qa1Users = (process.env.QA1_USERS ?? "").split(",").map(u => u.trim().toLowerCase()).filter(Boolean);
+    const qa2Users = (process.env.QA2_USERS ?? "").split(",").map(u => u.trim().toLowerCase()).filter(Boolean);
+    const allQaUsers = [...new Set([...qa1Users, ...qa2Users])];
+
     if (pathname.startsWith("/qa")) {
-      const qaUsers = (process.env.QA_USERS ?? "")
-        .split(",")
-        .map((u) => u.trim().toLowerCase())
-        .filter(Boolean);
-      if (!qaUsers.includes(username)) {
+      if (!allQaUsers.includes(username)) {
         return NextResponse.redirect(new URL("/tasks", req.url));
       }
     }

@@ -30,11 +30,17 @@ export async function PATCH(
   const { id } = await params;
   const { ratings, qa } = await req.json();
 
-  // Validate task belongs to user
   const task = await fetchTaskById(id);
   if (!task) return NextResponse.json({ error: "Not found" }, { status: 404 });
   if (task.username !== session.username)
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
+  // Block edits if QA1 status is DONE and user is not QA
+  const qaUsers = (process.env.QA_USERS ?? "").split(",").map(u => u.trim().toLowerCase()).filter(Boolean);
+  const isQa = qaUsers.includes(session.username.toLowerCase());
+  if (!isQa && task.qa1_status === "done") {
+    return NextResponse.json({ error: "Task is locked by QA." }, { status: 403 });
+  }
 
   await updateTask(id, session.username, ratings, qa);
   return NextResponse.json({ ok: true });

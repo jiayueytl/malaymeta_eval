@@ -30,11 +30,18 @@ export async function getSession(): Promise<Session | null> {
   }
 }
 
+export function getQa1Users(): string[] {
+  return (process.env.QA1_USERS ?? "")
+    .split(",").map((u) => u.trim().toLowerCase()).filter(Boolean);
+}
+
+export function getQa2Users(): string[] {
+  return (process.env.QA2_USERS ?? "")
+    .split(",").map((u) => u.trim().toLowerCase()).filter(Boolean);
+}
+
 export function getQaUsers(): string[] {
-  return (process.env.QA_USERS ?? "")
-    .split(",")
-    .map((u) => u.trim().toLowerCase())
-    .filter(Boolean);
+  return [...new Set([...getQa1Users(), ...getQa2Users()])];
 }
 
 export { COOKIE_NAME };

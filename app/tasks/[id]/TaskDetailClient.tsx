@@ -8,6 +8,7 @@ import { MODEL_MAP } from "@/types";
 import ModelRatingTab from "@/components/ModelRatingTab";
 
 type Ratings = Record<string, { score: number; justification: string }>;
+type QaRatings = Record<string, { justification: string }>;
 
 function initRatings(task: Task): Ratings {
   const defaults: Ratings = {};
@@ -20,31 +21,68 @@ function initRatings(task: Task): Ratings {
   return defaults;
 }
 
+function initQaRatings(data: Record<string, { justification: string }> | null): QaRatings {
+  const defaults: QaRatings = {};
+  for (const key of Object.keys(MODEL_MAP)) {
+    defaults[key] = { justification: data?.[key]?.justification ?? "" };
+  }
+  return defaults;
+}
+
 function isAllRated(ratings: Ratings): boolean {
   return Object.keys(MODEL_MAP).every((k) => ratings[k].justification.trim().length > 0);
 }
+
+const SCORE_COLORS: Record<number, { dot: string; tab: string }> = {
+  0: { dot: "bg-red-400",    tab: "text-red-500 border-red-300 bg-red-50/60" },
+  1: { dot: "bg-orange-400", tab: "text-orange-500 border-orange-300 bg-orange-50/60" },
+  2: { dot: "bg-yellow-400", tab: "text-yellow-600 border-yellow-300 bg-yellow-50/60" },
+  3: { dot: "bg-green-400",  tab: "text-green-600 border-green-300 bg-green-50/60" },
+  4: { dot: "bg-blue-400",   tab: "text-blue-600 border-blue-300 bg-blue-50/60" },
+};
 
 interface TaskDetailClientProps {
   task: Task;
   isQaUser: boolean;
   taskBriefUrl: string;
   nextPendingId: string | null;
+  isQa2User: boolean;
 }
 
-export default function TaskDetailClient({ task, isQaUser, taskBriefUrl, nextPendingId }: TaskDetailClientProps) {
+export default function TaskDetailClient(
+  { task, isQaUser, isQa2User, taskBriefUrl, nextPendingId }: TaskDetailClientProps) 
+{
   const router = useRouter();
   const modelKeys = Object.keys(MODEL_MAP);
 
+  const isLocked = !isQaUser && task.qa1_status === "done";
+
   const [activeTab, setActiveTab] = useState(0);
   const [ratings, setRatings] = useState<Ratings>(initRatings(task));
-  const [qaFlag, setQaFlag] = useState(task.qa1_flag ?? "PASS");
-  const [qaStatus, setQaStatus] = useState(task.qa1_status ?? "pending");
-  const [qaFeedback, setQaFeedback] = useState(task.qa1_feedback ?? "");
+  const [qa1Ratings, setQa1Ratings] = useState<QaRatings>(initQaRatings(task.qa1_ratings));
+  const [qa2Ratings, setQa2Ratings] = useState<QaRatings>(initQaRatings(task.qa2_ratings));
+
+  const [qa1Flag, setQa1Flag] = useState(task.qa1_flag ?? "PASS");
+  const [qa1Status, setQa1Status] = useState(task.qa1_status ?? "pending");
+  const [qa1Feedback, setQa1Feedback] = useState(task.qa1_feedback ?? "");
+
+  const [qa2Flag, setQa2Flag] = useState(task.qa2_flag ?? "PASS");
+  const [qa2Status, setQa2Status] = useState(task.qa2_status ?? "pending");
+  const [qa2Feedback, setQa2Feedback] = useState(task.qa2_feedback ?? "");
+
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
   function updateRating(key: string, field: "score" | "justification", value: number | string) {
     setRatings((prev) => ({ ...prev, [key]: { ...prev[key], [field]: value } }));
+  }
+
+  function updateQa1Rating(key: string, justification: string) {
+    setQa1Ratings((prev) => ({ ...prev, [key]: { justification } }));
+  }
+
+  function updateQa2Rating(key: string, justification: string) {
+    setQa2Ratings((prev) => ({ ...prev, [key]: { justification } }));
   }
 
   function showToast(msg: string) {
@@ -57,7 +95,10 @@ export default function TaskDetailClient({ task, isQaUser, taskBriefUrl, nextPen
   const completedCount = modelKeys.filter((k) => ratings[k].justification.trim().length > 0).length;
 
   async function handleSubmit() {
-    if (!allRated) { showToast("Please fill in justification for all 13 models."); return; }
+    if (!isLocked && !allRated) {
+      showToast("Please fill in justification for all 13 models.");
+      return;
+    }
     setSubmitting(true);
     try {
       const res = await fetch(`/api/tasks/${task.id}`, {
@@ -66,15 +107,25 @@ export default function TaskDetailClient({ task, isQaUser, taskBriefUrl, nextPen
         body: JSON.stringify({
           ratings,
           qa: isQaUser
-            ? { flag: qaFlag, feedback: qaFeedback, status: qaStatus }
-            : { flag: task.qa1_flag ?? "PASS", feedback: task.qa1_feedback ?? "", status: task.qa1_status ?? "pending" },
+            ? {
+                flag: qa1Flag, feedback: qa1Feedback, status: qa1Status,
+                qa1Ratings,
+                qa2Flag, qa2Feedback, qa2Status,
+                qa2Ratings,
+              }
+            : {
+                flag: task.qa1_flag ?? "PASS",
+                feedback: task.qa1_feedback ?? "",
+                status: task.qa1_status ?? "pending",
+              },
         }),
       });
       if (res.ok) {
         showToast(nextPendingId ? "Submitted! Loading next task…" : "All done! 🎉");
         setTimeout(() => router.push(nextPendingId ? `/tasks/${nextPendingId}` : "/tasks"), 800);
       } else {
-        showToast("Submission failed. Try again.");
+        const data = await res.json();
+        showToast(data.error ?? "Submission failed. Try again.");
       }
     } catch {
       showToast("Network error.");
@@ -86,7 +137,7 @@ export default function TaskDetailClient({ task, isQaUser, taskBriefUrl, nextPen
   return (
     <main className="max-w-5xl mx-auto px-6 py-10 animate-in">
       {/* Breadcrumb */}
-      <div className="flex items-center gap-2 mb-6 text-sm text-black-400">
+      <div className="flex items-center gap-2 mb-6 text-sm text-gray-400">
         <Link href="/tasks" className="hover:text-gray-600 transition-colors flex items-center gap-1">
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
             <path d="M9 11L5 7l4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
@@ -98,6 +149,11 @@ export default function TaskDetailClient({ task, isQaUser, taskBriefUrl, nextPen
         {task.is_submitted && (
           <span className="ml-2 text-xs px-2 py-0.5 rounded bg-green-50 border border-green-200 text-green-600">✓ Previously Submitted</span>
         )}
+        {isLocked && (
+          <span className="ml-2 text-xs px-2 py-0.5 rounded bg-red-50 border border-red-200 text-red-500 flex items-center gap-1">
+            🔒 Locked by QA
+          </span>
+        )}
       </div>
 
       {/* Title */}
@@ -107,7 +163,6 @@ export default function TaskDetailClient({ task, isQaUser, taskBriefUrl, nextPen
             <h1 style={{ fontFamily: "var(--font-display)" }} className="text-xl font-bold text-gray-900">
               Task Row {task.row_num}
             </h1>
-            
             <a
               href={taskBriefUrl}
               target="_blank"
@@ -120,34 +175,48 @@ export default function TaskDetailClient({ task, isQaUser, taskBriefUrl, nextPen
               Task Brief
             </a>
           </div>
-          <p className="text-xs text-black-400">{completedCount} of {modelKeys.length} models evaluated</p>
+          <p className="text-xs text-gray-400">{completedCount} of {modelKeys.length} models evaluated</p>
         </div>
         <div className="text-xs text-gray-500 bg-white border border-gray-200 rounded-lg px-3 py-2 shadow-sm" style={{ fontFamily: "var(--font-mono)" }}>
           {task.language as string}
         </div>
       </div>
 
+      {/* Locked banner */}
+      {isLocked && (
+        <div className="mb-6 flex items-center gap-3 bg-red-50 border border-red-200 rounded-xl px-5 py-3">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="shrink-0 text-red-400">
+            <rect x="3" y="7" width="10" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.5"/>
+            <path d="M5 7V5a3 3 0 0 1 6 0v2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+          </svg>
+          <p className="text-sm text-red-600">This task has been locked by QA. Your ratings and justifications are read-only.</p>
+        </div>
+      )}
+
       {/* Source + Notes */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-        <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
-          <p className="text-xs font-medium text-indigo-500 uppercase tracking-widest mb-3" style={{ fontFamily: "var(--font-mono)" }}>
-            Original Text · {task.language as string}
-          </p>
-          <p className="text-sm text-gray-700 leading-relaxed mb-3">{task.original_text as string}</p>
-          {task.url && (
-              <a
+      <div className="sticky top-14 z-30 bg-[#f5f5f7] pt-4 pb-4 -mx-6 px-6 border-b border-gray-200 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+            <p className="text-xs font-medium text-indigo-500 uppercase tracking-widest mb-3" style={{ fontFamily: "var(--font-mono)" }}>
+              Original Text · {task.language as string}
+            </p>
+            <p className="text-sm text-gray-700 leading-relaxed mb-3">{task.original_text as string}</p>
+            {task.url && (
+
+                <a
                 href={task.url as string}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-gray-50 border border-gray-200 text-gray-500 hover:text-indigo-500 hover:border-indigo-300 transition-all"
-              >
-              <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
-                <path d="M2 11L11 2M11 2H6M11 2v5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-              Original URL: {task.url}
-            </a>
-          )}
-        </div>
+                >
+                <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+                  <path d="M2 11L11 2M11 2H6M11 2v5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+                Original URL
+              </a>
+            )}
+          </div>
+          
         <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm flex flex-col">
           <p className="text-xs font-medium text-emerald-600 uppercase tracking-widest mb-3 shrink-0" style={{ fontFamily: "var(--font-mono)" }}>
             Notes / Reference
@@ -162,34 +231,45 @@ export default function TaskDetailClient({ task, isQaUser, taskBriefUrl, nextPen
             <ReactMarkdown>{task.notes as string ?? ""}</ReactMarkdown>
           </div>
         </div>
+        </div>
       </div>
 
       {/* Model Evaluation */}
       <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden mb-6 shadow-sm">
         <div className="border-b border-gray-100 px-5 py-3 flex items-center justify-between">
-          <p className="text-xs font-semibold text-black-400 uppercase tracking-widest">Model Evaluation</p>
-          <span className={`text-xs ${allRated ? "text-green-600" : "text-black-400"}`}>
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest">Model Evaluation</p>
+          <span className={`text-xs ${allRated ? "text-green-600" : "text-gray-400"}`}>
             {completedCount}/{modelKeys.length} rated
           </span>
         </div>
 
-        {/* Tabs */}
+        {/* Tabs — coloured when rated */}
         <div className="flex overflow-x-auto border-b border-gray-100">
           {modelKeys.map((key, i) => {
             const hasJust = ratings[key].justification.trim().length > 0;
+            const s = ratings[key].score;
+            const scoreStyle = hasJust ? SCORE_COLORS[s] : null;
+            const isActive = activeTab === i;
+
             return (
               <button
                 key={key}
                 onClick={() => setActiveTab(i)}
                 className={`shrink-0 px-4 py-3 text-xs font-medium border-b-2 transition-all duration-150 flex items-center gap-1.5 ${
-                  activeTab === i
-                    ? "border-indigo-500 text-indigo-600 bg-indigo-50/50"
-                    : "border-transparent text-black-400 hover:text-gray-600 hover:bg-gray-50"
+                  isActive
+                    ? scoreStyle
+                      ? `border-current ${scoreStyle.tab}`
+                      : "border-indigo-500 text-indigo-600 bg-indigo-50/50"
+                    : scoreStyle
+                      ? `border-transparent ${scoreStyle.tab} opacity-80 hover:opacity-100`
+                      : "border-transparent text-gray-400 hover:text-gray-600 hover:bg-gray-50"
                 }`}
                 style={{ fontFamily: "var(--font-mono)" }}
               >
                 {MODEL_MAP[key]}
-                {hasJust && <span className="w-1.5 h-1.5 rounded-full bg-green-400 shrink-0" />}
+                {hasJust && scoreStyle && (
+                  <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${scoreStyle.dot}`} />
+                )}
               </button>
             );
           })}
@@ -203,28 +283,35 @@ export default function TaskDetailClient({ task, isQaUser, taskBriefUrl, nextPen
             content={task[currentKey] as string ?? "—"}
             score={ratings[currentKey].score}
             justification={ratings[currentKey].justification}
+            qa1Justification={qa1Ratings[currentKey]?.justification}
+            qa2Justification={qa2Ratings[currentKey]?.justification} 
+            isQaUser={isQaUser}
+            isQa2User={isQa2User}                                       
+            isLocked={isLocked}
             onScoreChange={(s) => updateRating(currentKey, "score", s)}
             onJustificationChange={(t) => updateRating(currentKey, "justification", t)}
+            onQa1JustificationChange={(t) => updateQa1Rating(currentKey, t)}
+            onQa2JustificationChange={(t) => updateQa2Rating(currentKey, t)} 
           />
 
           <div className="flex items-center justify-between mt-6 pt-4 border-t border-gray-100">
             <button
               onClick={() => setActiveTab((p) => Math.max(0, p - 1))}
               disabled={activeTab === 0}
-              className="text-xs text-black-400 hover:text-gray-700 disabled:opacity-30 disabled:cursor-not-allowed flex items-center gap-1 transition-colors"
+              className="text-xs text-gray-400 hover:text-gray-700 disabled:opacity-30 disabled:cursor-not-allowed flex items-center gap-1 transition-colors"
             >
               <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
                 <path d="M9 11L5 7l4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
               Previous
             </button>
-            <span className="text-xs text-black-400" style={{ fontFamily: "var(--font-mono)" }}>
+            <span className="text-xs text-gray-400" style={{ fontFamily: "var(--font-mono)" }}>
               {activeTab + 1} / {modelKeys.length}
             </span>
             <button
               onClick={() => setActiveTab((p) => Math.min(modelKeys.length - 1, p + 1))}
               disabled={activeTab === modelKeys.length - 1}
-              className="text-xs text-black-400 hover:text-gray-700 disabled:opacity-30 disabled:cursor-not-allowed flex items-center gap-1 transition-colors"
+              className="text-xs text-gray-400 hover:text-gray-700 disabled:opacity-30 disabled:cursor-not-allowed flex items-center gap-1 transition-colors"
             >
               Next
               <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
@@ -235,70 +322,158 @@ export default function TaskDetailClient({ task, isQaUser, taskBriefUrl, nextPen
         </div>
       </div>
 
-      {/* QA Section */}
+      {/* QA Section — only for QA users */}
       {isQaUser && (
-        <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden mb-8 shadow-sm">
-          <div className="border-b border-gray-100 px-5 py-3 flex items-center gap-2">
-            <p className="text-xs font-semibold text-black-400 uppercase tracking-widest">QA1 Review</p>
-            <span className="text-xs px-2 py-0.5 rounded bg-indigo-50 border border-indigo-200 text-indigo-600">QA Access</span>
-          </div>
-          <div className="p-6 grid grid-cols-1 sm:grid-cols-3 gap-5">
-            <div>
-              <label className="text-xs font-medium text-black-400 uppercase tracking-widest block mb-3">QA1 Flag</label>
-              <div className="flex gap-2">
-                {["PASS", "FAIL"].map((opt) => (
-                  <button
-                    key={opt}
-                    onClick={() => setQaFlag(opt)}
-                    className={`flex-1 py-2.5 rounded-xl border text-xs font-semibold transition-all ${
-                      qaFlag === opt
-                        ? opt === "PASS"
-                          ? "bg-green-500 border-green-500 text-white"
-                          : "bg-red-500 border-red-500 text-white"
-                        : "bg-white border-gray-200 text-black-400 hover:border-gray-300"
-                    }`}
+        <>
+          {/* QA1 */}
+          <div className="bg-white border border-indigo-100 rounded-2xl overflow-hidden mb-4 shadow-sm">
+            <div className="border-b border-indigo-100 px-5 py-3 flex items-center gap-2 bg-indigo-50/40">
+              <p className="text-xs font-semibold text-indigo-600 uppercase tracking-widest">QA1 Review</p>
+              <span className="text-xs px-2 py-0.5 rounded bg-indigo-100 border border-indigo-200 text-indigo-600">Round 1</span>
+            </div>
+            <div className="p-6">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 mb-5">
+                <div>
+                  <label className="text-xs font-medium text-gray-400 uppercase tracking-widest block mb-3">QA1 Flag</label>
+                  <div className="flex gap-2">
+                    {["PASS", "FAIL"].map((opt) => (
+                      <button
+                        key={opt}
+                        onClick={() => setQa1Flag(opt)}
+                        className={`flex-1 py-2.5 rounded-xl border text-xs font-semibold transition-all ${
+                          qa1Flag === opt
+                            ? opt === "PASS" ? "bg-green-500 border-green-500 text-white" : "bg-red-500 border-red-500 text-white"
+                            : "bg-white border-gray-200 text-gray-400 hover:border-gray-300"
+                        }`}
+                      >
+                        {opt}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-gray-400 uppercase tracking-widest block mb-3">QA1 Status</label>
+                  <select
+                    value={qa1Status}
+                    onChange={(e) => setQa1Status(e.target.value)}
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-gray-700 focus:outline-none focus:border-indigo-400 transition-all"
                   >
-                    {opt}
-                  </button>
-                ))}
+                    <option value="pending">Pending</option>
+                    <option value="in_review">In Review</option>
+                    <option value="done">Done (locks annotator)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-gray-400 uppercase tracking-widest block mb-3">QA1 Feedback</label>
+                  <input
+                    type="text"
+                    value={qa1Feedback}
+                    onChange={(e) => setQa1Feedback(e.target.value)}
+                    placeholder="Overall QA1 notes…"
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-gray-700 placeholder:text-gray-300 focus:outline-none focus:border-indigo-400 transition-all"
+                  />
+                </div>
               </div>
-            </div>
-            <div>
-              <label className="text-xs font-medium text-black-400 uppercase tracking-widest block mb-3">QA1 Status</label>
-              <select
-                value={qaStatus}
-                onChange={(e) => setQaStatus(e.target.value)}
-                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-gray-700 focus:outline-none focus:border-indigo-400 transition-all"
-              >
-                <option value="pending">Pending</option>
-                <option value="approved">Approved</option>
-                <option value="rejected">Rejected</option>
-              </select>
-            </div>
-            <div>
-              <label className="text-xs font-medium text-black-400 uppercase tracking-widest block mb-3">QA1 Feedback</label>
-              <input
-                type="text"
-                value={qaFeedback}
-                onChange={(e) => setQaFeedback(e.target.value)}
-                placeholder="Optional notes…"
-                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-gray-700 placeholder:text-gray-300 focus:outline-none focus:border-indigo-400 transition-all"
-              />
+              {/* <p className="text-xs text-indigo-400 mb-2">Per-model QA1 justifications are entered inside each Model tab above ↑</p>
+              <div className="flex flex-wrap gap-2">
+                {modelKeys.map((key) => {
+                  const done = qa1Ratings[key]?.justification.trim().length > 0;
+                  return (
+                    <span key={key} className={`text-xs px-2 py-0.5 rounded-full border ${done ? "bg-indigo-50 border-indigo-200 text-indigo-600" : "bg-gray-50 border-gray-200 text-gray-400"}`}>
+                      {MODEL_MAP[key]} {done ? "✓" : "·"}
+                    </span>
+                  );
+                })}
+              </div> */}
             </div>
           </div>
-        </div>
+
+          {/* QA2 */}
+          <div className="bg-white border border-purple-100 rounded-2xl overflow-hidden mb-8 shadow-sm">
+            <div className="border-b border-purple-100 px-5 py-3 flex items-center gap-2 bg-purple-50/40">
+              <p className="text-xs font-semibold text-purple-600 uppercase tracking-widest">QA2 Review</p>
+              <span className="text-xs px-2 py-0.5 rounded bg-purple-100 border border-purple-200 text-purple-600">Round 2</span>
+            </div>
+            <div className="p-6">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 mb-5">
+                <div>
+                  <label className="text-xs font-medium text-gray-400 uppercase tracking-widest block mb-3">QA2 Flag</label>
+                  <div className="flex gap-2">
+                    {["PASS", "FAIL"].map((opt) => (
+                      <button
+                        key={opt}
+                        onClick={() => setQa2Flag(opt)}
+                        className={`flex-1 py-2.5 rounded-xl border text-xs font-semibold transition-all ${
+                          qa2Flag === opt
+                            ? opt === "PASS" ? "bg-green-500 border-green-500 text-white" : "bg-red-500 border-red-500 text-white"
+                            : "bg-white border-gray-200 text-gray-400 hover:border-gray-300"
+                        }`}
+                      >
+                        {opt}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-gray-400 uppercase tracking-widest block mb-3">QA2 Status</label>
+                  <select
+                    value={qa2Status}
+                    onChange={(e) => setQa2Status(e.target.value)}
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-gray-700 focus:outline-none focus:border-indigo-400 transition-all"
+                  >
+                    <option value="pending">Pending</option>
+                    <option value="in_review">In Review</option>
+                    <option value="done">Done</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-gray-400 uppercase tracking-widest block mb-3">QA2 Feedback</label>
+                  <input
+                    type="text"
+                    value={qa2Feedback}
+                    onChange={(e) => setQa2Feedback(e.target.value)}
+                    placeholder="Overall QA2 notes…"
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-gray-700 placeholder:text-gray-300 focus:outline-none focus:border-indigo-400 transition-all"
+                  />
+                </div>
+              </div>
+
+              {/* QA2 per-model justifications */}
+              {/* <p className="text-xs text-purple-400 mb-3">Per-model QA2 justifications</p>
+              <div className="space-y-3">
+                {modelKeys.map((key) => (
+                  <div key={key} className="flex gap-3 items-start">
+                    <span className="text-xs pt-2.5 text-gray-400 shrink-0 w-16 text-right" style={{ fontFamily: "var(--font-mono)" }}>
+                      {MODEL_MAP[key]}
+                    </span>
+                    <textarea
+                      rows={2}
+                      value={qa2Ratings[key]?.justification ?? ""}
+                      onChange={(e) => updateQa2Rating(key, e.target.value)}
+                      placeholder={`QA2 notes for ${MODEL_MAP[key]}…`}
+                      className="flex-1 bg-purple-50/50 border border-purple-200 rounded-xl px-3 py-2 text-sm text-gray-700 placeholder:text-purple-300 focus:outline-none focus:border-purple-400 focus:ring-1 focus:ring-purple-400/20 transition-all resize-none"
+                    />
+                  </div>
+                ))}
+              </div> */}
+            </div>
+          </div>
+        </>
       )}
 
       {/* Submit */}
       <div className="space-y-2">
-        {!allRated && (
+        {!isLocked && !allRated && (
           <p className="text-xs text-amber-500 text-center">
             ⚠ Complete justification for all {modelKeys.length - completedCount} remaining model(s) to enable submission.
           </p>
         )}
+        {isLocked && (
+          <p className="text-xs text-red-400 text-center">🔒 This task is locked. Only QA users can make changes.</p>
+        )}
         <button
           onClick={handleSubmit}
-          disabled={submitting || !allRated}
+          disabled={submitting || (!isQaUser && (isLocked || !allRated))}
           className="w-full bg-indigo-500 hover:bg-indigo-600 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold text-sm rounded-xl py-3.5 transition-all duration-150 flex items-center justify-center gap-2 shadow-sm"
         >
           {submitting ? (
@@ -309,7 +484,7 @@ export default function TaskDetailClient({ task, isQaUser, taskBriefUrl, nextPen
               </svg>
               Submitting…
             </>
-          ) : "Submit Annotation"}
+          ) : isQaUser ? "Save QA Review" : "Submit Annotation"}
         </button>
       </div>
 

@@ -1,16 +1,8 @@
-import { getSession, getQaUsers } from "@/lib/auth";
+import { getSession, getQaUsers, getQa1Users, getQa2Users } from "@/lib/auth";
 import { fetchTaskById, fetchAllTasks } from "@/lib/tasks";
 import { redirect, notFound } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import TaskDetailClient from "./TaskDetailClient";
-
-
-// function getQaUsers(): string[] {
-//   return (process.env.QA_USERS ?? "")
-//     .split(",")
-//     .map((u) => u.trim().toLowerCase())
-//     .filter(Boolean);
-// }
 
 export default async function TaskDetailPage({
   params,
@@ -21,30 +13,46 @@ export default async function TaskDetailPage({
   const session = await getSession();
   if (!session) redirect("/login");
 
-  const [task, allTasks] = await Promise.all([
-    fetchTaskById(id),
-    fetchAllTasks(session.username),
-  ]);
+  const qa1Users = getQa1Users();
+  const qa2Users = getQa2Users();
+  const allQaUsers = getQaUsers();
+  const username = session.username.toLowerCase();
 
+  const isQaUser = allQaUsers.includes(username);
+  const isQa2User = qa2Users.includes(username);
+  const isQa1User = qa1Users.includes(username);
+
+  const task = await fetchTaskById(id);
   if (!task) notFound();
-  if (task.username !== session.username) redirect("/tasks");
 
-  // Find next pending task after current one (by row_num)
+  // Annotators can only see their own tasks
+  // QA1 can only see tasks assigned to them via qa1_username
+  // QA2 can see everything
+  if (!isQa2User) {
+    if (isQa1User) {
+      if ((task.qa1_username as string) !== session.username) redirect("/tasks");
+    } else {
+      if (task.username !== session.username) redirect("/tasks");
+    }
+  }
+
+  // Find next pending task for navigation
+  const allTasks = await fetchAllTasks(session.username);
   const nextPending = allTasks.find(
     (t) => !t.is_submitted && t.id !== id && t.row_num > (task.row_num as number)
   ) ?? allTasks.find(
-    (t) => !t.is_submitted && t.id !== id  // fallback: any other pending task
+    (t) => !t.is_submitted && t.id !== id
   ) ?? null;
 
-  const isQaUser = getQaUsers().includes(session.username.toLowerCase());
   const taskBriefUrl = process.env.TASK_BRIEF_URL ?? "https://onedrive.live.com/placeholder";
 
   return (
     <div className="min-h-screen bg-[#f5f5f7]">
-      <Navbar username={session.username} />
+      <Navbar username={session.username} isQaUser={isQaUser} isQa2User={isQa2User} />
       <TaskDetailClient
         task={task}
         isQaUser={isQaUser}
+        isQa2User={isQa2User}
         taskBriefUrl={taskBriefUrl}
         nextPendingId={nextPending?.id ?? null}
       />

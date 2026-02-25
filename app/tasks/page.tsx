@@ -1,4 +1,4 @@
-import { getSession, getQaUsers } from "@/lib/auth";
+import { getSession, getQaUsers, getQa1Users, getQa2Users } from "@/lib/auth";
 import { fetchAllTasks } from "@/lib/tasks";
 import { redirect } from "next/navigation";
 import Navbar from "@/components/Navbar";
@@ -13,10 +13,11 @@ export default async function TasksPage() {
   const submitted = tasks.filter((t) => t.is_submitted).length;
   const progress = total > 0 ? (submitted / total) * 100 : 0;
   const isQaUser = getQaUsers().includes(session.username.toLowerCase());
+  const isQa2User = getQa2Users().includes(session.username.toLowerCase());
 
   return (
     <div className="min-h-screen bg-[#f5f5f7]">
-      <Navbar username={session.username} isQaUser={isQaUser} />
+      <Navbar username={session.username} isQaUser={isQaUser} isQa2User={isQa2User} />
 
       <main className="max-w-3xl mx-auto px-6 py-10">
         <div className="mb-8 animate-in">

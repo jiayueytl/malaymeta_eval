@@ -1,17 +1,22 @@
 export interface Task extends Record<string, unknown> {
-  notes: string;
   id: string;
   row_num: number;
   username: string;
   original_text: string;
   language: string;
   reference: string;
+  notes: string;
   url: string;
   is_submitted: boolean;
   ratings: Record<string, { score: number; justification: string }> | null;
   qa1_flag: string | null;
   qa1_feedback: string | null;
   qa1_status: string | null;
+  qa1_ratings: Record<string, { justification: string }> | null;
+  qa2_flag: string | null;
+  qa2_feedback: string | null;
+  qa2_status: string | null;
+  qa2_ratings: Record<string, { justification: string }> | null;
   // Model columns
   gemini_3_pro_preview: string;
   gpt_5_2_2025_12_11: string;
