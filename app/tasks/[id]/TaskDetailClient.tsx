@@ -161,7 +161,7 @@ export default function TaskDetailClient(
         <div>
           <div className="flex items-center gap-3 mb-1">
             <h1 style={{ fontFamily: "var(--font-display)" }} className="text-xl font-bold text-gray-900">
-              Task Row {task.row_num}
+              Task ID {task.row_num}
             </h1>
             <a
               href={taskBriefUrl}
@@ -486,6 +486,20 @@ export default function TaskDetailClient(
             </>
           ) : isQaUser ? "Save QA Review" : "Submit Annotation"}
         </button>
+
+        {/* Skip button — only for QA users when there's a next task */}
+        {isQaUser && nextPendingId && (
+          <button
+            onClick={() => router.push(`/tasks/${nextPendingId}`)}
+            disabled={submitting}
+            className="w-full bg-white hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed text-gray-500 hover:text-gray-700 font-medium text-sm rounded-xl py-3 transition-all duration-150 flex items-center justify-center gap-2 border border-gray-200 shadow-sm"
+          >
+            Skip to next task
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <path d="M5 3l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </button>
+        )}
       </div>
 
       {/* Toast */}

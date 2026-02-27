@@ -13,7 +13,7 @@ export default function TaskCard({ task }: { task: TaskSummary }) {
                 className="text-xs font-medium px-2 py-0.5 rounded"
                 style={{ fontFamily: "var(--font-mono)", background: "#eef2ff", color: "#4f46e5", border: "1px solid #c7d2fe" }}
               >
-                Row {task.row_num}
+                ID {task.row_num}
               </span>
               {task.is_submitted ? (
                 <span className="text-xs font-medium px-2 py-0.5 rounded bg-green-50 text-green-600 border border-green-200">✓ Submitted</span>

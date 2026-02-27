@@ -215,7 +215,7 @@ export default function QaDashboardClient({ grouped, totalAll, submittedAll, isQ
                         className="text-xs shrink-0 w-14 text-center px-2 py-0.5 rounded"
                         style={{ fontFamily: "var(--font-mono)", background: "#eef2ff", color: "#4f46e5", border: "1px solid #c7d2fe" }}
                       >
-                        Row {task.row_num}
+                        ID {task.row_num}
                       </span>
                       <p className="text-sm text-gray-500 truncate flex-1">{task.original_text}</p>
                     </Link>
