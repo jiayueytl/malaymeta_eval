@@ -463,7 +463,7 @@ export default function TaskDetailClient(
 
       {/* Submit */}
       <div className="space-y-2">
-        {!isLocked && !allRated && (
+        {!isLocked && !allRated && !task.is_submitted && (
           <p className="text-xs text-amber-500 text-center">
             ⚠ Complete justification for all {modelKeys.length - completedCount} remaining model(s) to enable submission.
           </p>
@@ -473,7 +473,7 @@ export default function TaskDetailClient(
         )}
         <button
           onClick={handleSubmit}
-          disabled={submitting || (!isQaUser && (isLocked || !allRated))}
+          disabled={submitting || (!isQaUser && (isLocked || (!allRated && !task.is_submitted)))}
           className="w-full bg-indigo-500 hover:bg-indigo-600 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold text-sm rounded-xl py-3.5 transition-all duration-150 flex items-center justify-center gap-2 shadow-sm"
         >
           {submitting ? (
