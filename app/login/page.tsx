@@ -115,7 +115,7 @@ export default function LoginPage() {
         </form>
 
         <p className="text-center text-gray-300 text-xs mt-6" style={{ fontFamily: "var(--font-mono)" }}>
-          v1.0 · MalayMeta Eval
+          v1.0 | MalayMeta Eval Copyright © YTL AI LABS - Human Data Department
         </p>
       </div>
     </div>
