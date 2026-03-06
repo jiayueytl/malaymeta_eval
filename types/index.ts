@@ -34,6 +34,7 @@ export interface Task extends Record<string, unknown> {
 }
 
 export interface TaskSummary {
+  username: string;
   id: string;
   row_num: number;
   original_text: string;
