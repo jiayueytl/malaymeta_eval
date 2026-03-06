@@ -1,5 +1,5 @@
 import { getSession, getQaUsers, getQa1Users, getQa2Users } from "@/lib/auth";
-import { fetchTaskById, fetchAllTasks } from "@/lib/tasks";
+import { fetchTaskById, fetchAllTasks, fetchAllTasksForQa1 } from "@/lib/tasks";
 import { redirect, notFound } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import TaskDetailClient from "./TaskDetailClient";
@@ -25,24 +25,48 @@ export default async function TaskDetailPage({
   const task = await fetchTaskById(id);
   if (!task) notFound();
 
-  // Annotators can only see their own tasks
-  // QA1 can only see tasks assigned to them via qa1_username
-  // QA2 can see everything
-  if (!isQa2User) {
-    if (isQa1User) {
-      if ((task.qa1_username as string) !== session.username) redirect("/tasks");
-    } else {
-      if (task.username !== session.username) redirect("/tasks");
+  // Access control:
+  // QA2  → can see any task
+  // QA1  → can see any task assigned to them OR unassigned tasks
+  // Annotator → can only see their own tasks
+  if (isQa2User) {
+    // no restriction
+  } else if (isQa1User) {
+    const assignedTo = task.qa1_username as string | null;
+    // Block only if explicitly assigned to someone else
+    if (assignedTo && assignedTo !== session.username) {
+      redirect("/tasks");
     }
+  } else {
+    if (task.username !== session.username) redirect("/tasks");
   }
 
-  // Find next pending task for navigation
-  const allTasks = await fetchAllTasks(session.username);
-  const nextPending = allTasks.find(
-    (t) => !t.is_submitted && t.id !== id && t.row_num > (task.row_num as number)
-  ) ?? allTasks.find(
-    (t) => !t.is_submitted && t.id !== id
-  ) ?? null;
+  // Find next pending task for navigation — scoped correctly per role
+  let nextPending = null;
+  if (isQa2User) {
+    // QA2: fetch all tasks across everyone
+    const { fetchAllTasksGrouped } = await import("@/lib/tasks");
+    const grouped = await fetchAllTasksGrouped();
+    const allTasks = Object.values(grouped).flat();
+    nextPending =
+      allTasks.find((t) => !t.is_submitted && t.id !== id && (t.row_num as number) > (task.row_num as number)) ??
+      allTasks.find((t) => !t.is_submitted && t.id !== id) ??
+      null;
+  } else if (isQa1User) {
+    // QA1: fetch only tasks assigned to them
+    const assignedTasks = await fetchAllTasksForQa1(session.username);
+    nextPending =
+      assignedTasks.find((t) => !t.is_submitted && t.id !== id && (t.row_num as number) > (task.row_num as number)) ??
+      assignedTasks.find((t) => !t.is_submitted && t.id !== id) ??
+      null;
+  } else {
+    // Annotator: fetch their own tasks
+    const allTasks = await fetchAllTasks(session.username);
+    nextPending =
+      allTasks.find((t) => !t.is_submitted && t.id !== id && (t.row_num as number) > (task.row_num as number)) ??
+      allTasks.find((t) => !t.is_submitted && t.id !== id) ??
+      null;
+  }
 
   const taskBriefUrl = process.env.TASK_BRIEF_URL ?? "https://onedrive.live.com/placeholder";
 

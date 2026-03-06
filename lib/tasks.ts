@@ -3,7 +3,7 @@ import type { Task, TaskSummary } from "@/types";
 
 export async function fetchAllTasks(username: string): Promise<TaskSummary[]> {
   return query<TaskSummary>(
-    `SELECT id, row_num, original_text, is_submitted
+    `SELECT id, row_num, original_text, is_submitted, username
      FROM data.annotation_tasks
      WHERE username = $1
      ORDER BY row_num ASC`,
@@ -54,51 +54,52 @@ export async function updateTask(
 }
 
 export async function fetchAllTasksGrouped(): Promise<Record<string, TaskSummary[]>> {
-  const rows = await query<TaskSummary & { username: string }>(
+  const rows = await query<TaskSummary>(
     `SELECT id, row_num, original_text, is_submitted, username
      FROM data.annotation_tasks
      ORDER BY username ASC, row_num ASC`
   );
-
   return rows.reduce<Record<string, TaskSummary[]>>((acc, row) => {
-    const { username, ...task } = row;
-    if (!acc[username]) acc[username] = [];
-    acc[username].push(task);
+    if (!acc[row.username]) acc[row.username] = [];
+    acc[row.username].push(row);
     return acc;
   }, {});
 }
 
 export async function fetchAllTasksGroupedForQa1(qa1Username: string): Promise<Record<string, TaskSummary[]>> {
-  // QA1 sees only their assigned tasks, grouped by annotator username (hidden in UI)
-  const rows = await query<TaskSummary & { username: string }>(
+  // QA1 sees only their assigned tasks, grouped by masked annotator key
+  const rows = await query<TaskSummary>(
     `SELECT id, row_num, original_text, is_submitted, username
      FROM data.annotation_tasks
      WHERE qa1_username = $1
      ORDER BY row_num ASC`,
     [qa1Username]
   );
-
-  // Group by a masked key — QA1 cannot see real usernames
-  // We use a stable index instead
   const usernameIndexMap = new Map<string, number>();
   let idx = 0;
   const grouped: Record<string, TaskSummary[]> = {};
-
   for (const row of rows) {
-    const { username, ...task } = row;
-    if (!usernameIndexMap.has(username)) {
-      usernameIndexMap.set(username, ++idx);
+    if (!usernameIndexMap.has(row.username)) {
+      usernameIndexMap.set(row.username, ++idx);
     }
-    const maskedKey = `Annotator ${usernameIndexMap.get(username)}`;
+    const maskedKey = `Annotator ${usernameIndexMap.get(row.username)}`;
     if (!grouped[maskedKey]) grouped[maskedKey] = [];
-    grouped[maskedKey].push(task);
+    grouped[maskedKey].push(row);
   }
-
   return grouped;
 }
 
+export async function fetchAllTasksForQa1(qa1Username: string): Promise<TaskSummary[]> {
+  return query<TaskSummary>(
+    `SELECT id, row_num, original_text, is_submitted, username
+     FROM data.annotation_tasks
+     WHERE qa1_username = $1
+     ORDER BY row_num ASC`,
+    [qa1Username]
+  );
+}
+
 export async function assignQa1User(taskIds: string[], qa1Username: string): Promise<void> {
-  // Use unnest for bulk update
   await query(
     `UPDATE data.annotation_tasks
      SET qa1_username = $1

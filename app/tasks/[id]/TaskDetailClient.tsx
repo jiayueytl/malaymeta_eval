@@ -49,8 +49,76 @@ interface TaskDetailClientProps {
   isQa2User: boolean;
 }
 
+// ── Per-model QA justification panel ────────────────────────────────────────
+function QaModelPanel({
+  modelKeys,
+  qaRatings,
+  onUpdate,
+  colorClass,
+  placeholderPrefix,
+  readOnly = false,
+}: {
+  modelKeys: string[];
+  qaRatings: QaRatings;
+  onUpdate?: (key: string, val: string) => void;
+  colorClass: string; // e.g. "indigo" | "purple"
+  placeholderPrefix: string;
+  readOnly?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const filledCount = modelKeys.filter((k) => qaRatings[k]?.justification.trim().length > 0).length;
+
+  return (
+    <div className="mt-4">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className={`flex items-center gap-2 text-xs font-medium text-${colorClass}-500 hover:text-${colorClass}-700 transition-colors`}
+      >
+        <svg
+          width="12" height="12" viewBox="0 0 12 12" fill="none"
+          className={`transition-transform ${open ? "rotate-90" : ""}`}
+        >
+          <path d="M4 2l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+        Per-model justifications
+        <span className={`px-1.5 py-0.5 rounded text-[10px] bg-${colorClass}-50 border border-${colorClass}-200 text-${colorClass}-500`}>
+          {filledCount}/{modelKeys.length}
+        </span>
+      </button>
+
+      {open && (
+        <div className="mt-3 space-y-2">
+          {modelKeys.map((key) => (
+            <div key={key} className="flex gap-3 items-start">
+              <span
+                className={`text-[10px] pt-2.5 text-${colorClass}-400 shrink-0 w-20 text-right`}
+                style={{ fontFamily: "var(--font-mono)" }}
+              >
+                {MODEL_MAP[key]}
+              </span>
+              {readOnly ? (
+                <p className={`flex-1 text-xs text-gray-500 bg-${colorClass}-50/40 border border-${colorClass}-100 rounded-xl px-3 py-2 min-h-[36px]`}>
+                  {qaRatings[key]?.justification || <span className="text-gray-300 italic">No justification</span>}
+                </p>
+              ) : (
+                <textarea
+                  rows={2}
+                  value={qaRatings[key]?.justification ?? ""}
+                  onChange={(e) => onUpdate?.(key, e.target.value)}
+                  placeholder={`${placeholderPrefix} notes for ${MODEL_MAP[key]}…`}
+                  className={`flex-1 bg-${colorClass}-50/50 border border-${colorClass}-200 rounded-xl px-3 py-2 text-sm text-gray-700 placeholder:text-${colorClass}-200 focus:outline-none focus:border-${colorClass}-400 transition-all resize-none`}
+                />
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function TaskDetailClient(
-  { task, isQaUser, isQa2User, taskBriefUrl, nextPendingId }: TaskDetailClientProps) 
+  { task, isQaUser, isQa2User, taskBriefUrl, nextPendingId }: TaskDetailClientProps)
 {
   const router = useRouter();
   const modelKeys = Object.keys(MODEL_MAP);
@@ -95,10 +163,12 @@ export default function TaskDetailClient(
   const completedCount = modelKeys.filter((k) => ratings[k].justification.trim().length > 0).length;
 
   async function handleSubmit() {
-    if (!isLocked && !allRated) {
+    // ── Annotator validation only — QA users skip this ──
+    if (!isQaUser && !isLocked && !allRated) {
       showToast("Please fill in justification for all 13 models.");
       return;
     }
+
     setSubmitting(true);
     try {
       const res = await fetch(`/api/tasks/${task.id}`, {
@@ -107,12 +177,19 @@ export default function TaskDetailClient(
         body: JSON.stringify({
           ratings,
           qa: isQaUser
-            ? {
-                flag: qa1Flag, feedback: qa1Feedback, status: qa1Status,
-                qa1Ratings,
-                qa2Flag, qa2Feedback, qa2Status,
-                qa2Ratings,
-              }
+            ? isQa2User
+              ? {
+                  // QA2 sends everything
+                  flag: qa1Flag, feedback: qa1Feedback, status: qa1Status,
+                  qa1Ratings,
+                  qa2Flag, qa2Feedback, qa2Status,
+                  qa2Ratings,
+                }
+              : {
+                  // QA1 sends only qa1 fields
+                  flag: qa1Flag, feedback: qa1Feedback, status: qa1Status,
+                  qa1Ratings,
+                }
             : {
                 flag: task.qa1_flag ?? "PASS",
                 feedback: task.qa1_feedback ?? "",
@@ -202,13 +279,12 @@ export default function TaskDetailClient(
             </p>
             <p className="text-sm text-gray-700 leading-relaxed mb-3">{task.original_text as string}</p>
             {task.url && (
-
-                <a
+              <a
                 href={task.url as string}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-gray-50 border border-gray-200 text-gray-500 hover:text-indigo-500 hover:border-indigo-300 transition-all"
-                >
+              >
                 <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
                   <path d="M2 11L11 2M11 2H6M11 2v5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
                 </svg>
@@ -216,21 +292,21 @@ export default function TaskDetailClient(
               </a>
             )}
           </div>
-          
-        <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm flex flex-col">
-          <p className="text-xs font-medium text-emerald-600 uppercase tracking-widest mb-3 shrink-0" style={{ fontFamily: "var(--font-mono)" }}>
-            Notes / Reference
-          </p>
-          <div className="overflow-y-auto max-h-48 pr-1 prose prose-sm max-w-none
-            prose-p:text-gray-600 prose-p:leading-relaxed prose-p:my-1
-            prose-headings:text-gray-800 prose-headings:font-semibold
-            prose-strong:text-gray-800
-            prose-code:text-indigo-600 prose-code:bg-indigo-50 prose-code:px-1 prose-code:rounded prose-code:text-xs
-            prose-ul:text-gray-600 prose-li:my-0.5
-            prose-a:text-indigo-500 prose-a:no-underline hover:prose-a:underline">
-            <ReactMarkdown>{task.notes as string ?? ""}</ReactMarkdown>
+
+          <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm flex flex-col">
+            <p className="text-xs font-medium text-emerald-600 uppercase tracking-widest mb-3 shrink-0" style={{ fontFamily: "var(--font-mono)" }}>
+              Notes / Reference
+            </p>
+            <div className="overflow-y-auto max-h-48 pr-1 prose prose-sm max-w-none
+              prose-p:text-gray-600 prose-p:leading-relaxed prose-p:my-1
+              prose-headings:text-gray-800 prose-headings:font-semibold
+              prose-strong:text-gray-800
+              prose-code:text-indigo-600 prose-code:bg-indigo-50 prose-code:px-1 prose-code:rounded prose-code:text-xs
+              prose-ul:text-gray-600 prose-li:my-0.5
+              prose-a:text-indigo-500 prose-a:no-underline hover:prose-a:underline">
+              <ReactMarkdown>{task.notes as string ?? ""}</ReactMarkdown>
+            </div>
           </div>
-        </div>
         </div>
       </div>
 
@@ -243,7 +319,7 @@ export default function TaskDetailClient(
           </span>
         </div>
 
-        {/* Tabs — coloured when rated */}
+        {/* Tabs */}
         <div className="flex overflow-x-auto border-b border-gray-100">
           {modelKeys.map((key, i) => {
             const hasJust = ratings[key].justification.trim().length > 0;
@@ -284,14 +360,14 @@ export default function TaskDetailClient(
             score={ratings[currentKey].score}
             justification={ratings[currentKey].justification}
             qa1Justification={qa1Ratings[currentKey]?.justification}
-            qa2Justification={qa2Ratings[currentKey]?.justification} 
+            qa2Justification={qa2Ratings[currentKey]?.justification}
             isQaUser={isQaUser}
-            isQa2User={isQa2User}                                       
+            isQa2User={isQa2User}
             isLocked={isLocked}
             onScoreChange={(s) => updateRating(currentKey, "score", s)}
             onJustificationChange={(t) => updateRating(currentKey, "justification", t)}
             onQa1JustificationChange={(t) => updateQa1Rating(currentKey, t)}
-            onQa2JustificationChange={(t) => updateQa2Rating(currentKey, t)} 
+            onQa2JustificationChange={(t) => updateQa2Rating(currentKey, t)}
           />
 
           <div className="flex items-center justify-between mt-6 pt-4 border-t border-gray-100">
@@ -374,25 +450,26 @@ export default function TaskDetailClient(
                   />
                 </div>
               </div>
-              {/* <p className="text-xs text-indigo-400 mb-2">Per-model QA1 justifications are entered inside each Model tab above ↑</p>
-              <div className="flex flex-wrap gap-2">
-                {modelKeys.map((key) => {
-                  const done = qa1Ratings[key]?.justification.trim().length > 0;
-                  return (
-                    <span key={key} className={`text-xs px-2 py-0.5 rounded-full border ${done ? "bg-indigo-50 border-indigo-200 text-indigo-600" : "bg-gray-50 border-gray-200 text-gray-400"}`}>
-                      {MODEL_MAP[key]} {done ? "✓" : "·"}
-                    </span>
-                  );
-                })}
-              </div> */}
+
+              {/* Per-model QA1 justifications */}
+              <QaModelPanel
+                modelKeys={modelKeys}
+                qaRatings={qa1Ratings}
+                onUpdate={updateQa1Rating}
+                colorClass="indigo"
+                placeholderPrefix="QA1"
+              />
             </div>
           </div>
 
-          {/* QA2 */}
+          {/* QA2 — only editable by QA2; QA1 sees it read-only */}
           <div className="bg-white border border-purple-100 rounded-2xl overflow-hidden mb-8 shadow-sm">
             <div className="border-b border-purple-100 px-5 py-3 flex items-center gap-2 bg-purple-50/40">
               <p className="text-xs font-semibold text-purple-600 uppercase tracking-widest">QA2 Review</p>
               <span className="text-xs px-2 py-0.5 rounded bg-purple-100 border border-purple-200 text-purple-600">Round 2</span>
+              {!isQa2User && (
+                <span className="ml-auto text-xs text-purple-300 italic">Read-only</span>
+              )}
             </div>
             <div className="p-6">
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 mb-5">
@@ -402,11 +479,12 @@ export default function TaskDetailClient(
                     {["PASS", "FAIL"].map((opt) => (
                       <button
                         key={opt}
-                        onClick={() => setQa2Flag(opt)}
-                        className={`flex-1 py-2.5 rounded-xl border text-xs font-semibold transition-all ${
+                        onClick={() => isQa2User && setQa2Flag(opt)}
+                        disabled={!isQa2User}
+                        className={`flex-1 py-2.5 rounded-xl border text-xs font-semibold transition-all disabled:cursor-not-allowed ${
                           qa2Flag === opt
                             ? opt === "PASS" ? "bg-green-500 border-green-500 text-white" : "bg-red-500 border-red-500 text-white"
-                            : "bg-white border-gray-200 text-gray-400 hover:border-gray-300"
+                            : "bg-white border-gray-200 text-gray-400 hover:border-gray-300 disabled:opacity-50"
                         }`}
                       >
                         {opt}
@@ -419,7 +497,8 @@ export default function TaskDetailClient(
                   <select
                     value={qa2Status}
                     onChange={(e) => setQa2Status(e.target.value)}
-                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-gray-700 focus:outline-none focus:border-indigo-400 transition-all"
+                    disabled={!isQa2User}
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-gray-700 focus:outline-none focus:border-purple-400 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <option value="pending">Pending</option>
                     <option value="in_review">In Review</option>
@@ -432,30 +511,22 @@ export default function TaskDetailClient(
                     type="text"
                     value={qa2Feedback}
                     onChange={(e) => setQa2Feedback(e.target.value)}
+                    disabled={!isQa2User}
                     placeholder="Overall QA2 notes…"
-                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-gray-700 placeholder:text-gray-300 focus:outline-none focus:border-indigo-400 transition-all"
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-gray-700 placeholder:text-gray-300 focus:outline-none focus:border-purple-400 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                   />
                 </div>
               </div>
 
-              {/* QA2 per-model justifications */}
-              {/* <p className="text-xs text-purple-400 mb-3">Per-model QA2 justifications</p>
-              <div className="space-y-3">
-                {modelKeys.map((key) => (
-                  <div key={key} className="flex gap-3 items-start">
-                    <span className="text-xs pt-2.5 text-gray-400 shrink-0 w-16 text-right" style={{ fontFamily: "var(--font-mono)" }}>
-                      {MODEL_MAP[key]}
-                    </span>
-                    <textarea
-                      rows={2}
-                      value={qa2Ratings[key]?.justification ?? ""}
-                      onChange={(e) => updateQa2Rating(key, e.target.value)}
-                      placeholder={`QA2 notes for ${MODEL_MAP[key]}…`}
-                      className="flex-1 bg-purple-50/50 border border-purple-200 rounded-xl px-3 py-2 text-sm text-gray-700 placeholder:text-purple-300 focus:outline-none focus:border-purple-400 focus:ring-1 focus:ring-purple-400/20 transition-all resize-none"
-                    />
-                  </div>
-                ))}
-              </div> */}
+              {/* Per-model QA2 justifications */}
+              <QaModelPanel
+                modelKeys={modelKeys}
+                qaRatings={qa2Ratings}
+                onUpdate={isQa2User ? updateQa2Rating : undefined}
+                colorClass="purple"
+                placeholderPrefix="QA2"
+                readOnly={!isQa2User}
+              />
             </div>
           </div>
         </>
@@ -463,7 +534,7 @@ export default function TaskDetailClient(
 
       {/* Submit */}
       <div className="space-y-2">
-        {!isLocked && !allRated && !task.is_submitted && (
+        {!isQaUser && !isLocked && !allRated && !task.is_submitted && (
           <p className="text-xs text-amber-500 text-center">
             ⚠ Complete justification for all {modelKeys.length - completedCount} remaining model(s) to enable submission.
           </p>
@@ -487,7 +558,6 @@ export default function TaskDetailClient(
           ) : isQaUser ? "Save QA Review" : "Submit Annotation"}
         </button>
 
-        {/* Skip button — only for QA users when there's a next task */}
         {isQaUser && nextPendingId && (
           <button
             onClick={() => router.push(`/tasks/${nextPendingId}`)}
